@@ -158,7 +158,7 @@ sealed class KeyDialog : BaseDialog
 
 sealed class OpenDialog : BaseDialog
 {
-    private readonly ListBox _list = new() { Dock = DockStyle.Fill, IntegralHeight = false };
+    private readonly ListBox _list = new() { Dock = DockStyle.Fill, IntegralHeight = false, SelectionMode = SelectionMode.MultiExtended };
     private readonly CheckBox _deleted = new() { Text = "Show deleted", AutoSize = true, Dock = DockStyle.Top };
     private readonly IReadOnlyList<(string Id, NoteContent Note)> _notes;
     private List<string> _ids = [];
@@ -172,11 +172,17 @@ sealed class OpenDialog : BaseDialog
         Buttons(ok, Cancel());
         AcceptButton = ok;
         _deleted.CheckedChanged += (_, _) => Fill();
-        _list.DoubleClick += (_, _) => { if (Selected is not null) DialogResult = DialogResult.OK; };
+        _list.DoubleClick += (_, _) => { if (Selected.Count > 0) DialogResult = DialogResult.OK; };
+        _list.KeyDown += (_, e) =>
+        {
+            if (e.KeyData != (Keys.Control | Keys.A)) return;
+            for (int i = 0; i < _list.Items.Count; i++) _list.SetSelected(i, true);
+            e.SuppressKeyPress = true;
+        };
         Fill();
     }
 
-    public string? Selected => _list.SelectedIndex >= 0 ? _ids[_list.SelectedIndex] : null;
+    public IReadOnlyList<string> Selected => _list.SelectedIndices.Cast<int>().Select(i => _ids[i]).ToList();
 
     private void Fill()
     {

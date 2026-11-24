@@ -664,9 +664,12 @@ sealed class NoteWindow : Form
     private void ShowOpen()
     {
         using var d = new OpenDialog(_shell.Engine.Notes());
-        if (d.ShowDialog(this) != DialogResult.OK || d.Selected is not { } id) return;
-        if (_shell.Engine.Get(id) is { Deleted: true } n) _shell.Engine.SetNote(id, n with { Deleted = false });
-        _shell.OpenNote(id, this);
+        if (d.ShowDialog(this) != DialogResult.OK) return;
+        foreach (string id in d.Selected)
+        {
+            if (_shell.Engine.Get(id) is { Deleted: true } n) _shell.Engine.SetNote(id, n with { Deleted = false });
+            _shell.OpenNote(id, this);
+        }
     }
 
     private void ShowConflicts()
@@ -674,7 +677,8 @@ sealed class NoteWindow : Form
         var list = _shell.Engine.Conflicts();
         if (list.Count == 0) { MessageBox.Show(this, "There are no conflicts.", "Notepad"); return; }
         using var d = new OpenDialog(list) { Text = "Conflicts" };
-        if (d.ShowDialog(this) == DialogResult.OK && d.Selected is { } id) _shell.OpenNote(id, this);
+        if (d.ShowDialog(this) != DialogResult.OK) return;
+        foreach (string id in d.Selected) _shell.OpenNote(id, this);
     }
 
     private async void ShowHistory()
