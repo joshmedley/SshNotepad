@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <NoWarn>$(NoWarn);WFO1000</NoWarn>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ApplicationIcon>..\SshNotepad\notepad.ico</ApplicationIcon>
+    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\SshNotepad.Core\SshNotepad.Core.csproj" />
+  </ItemGroup>
+</Project>

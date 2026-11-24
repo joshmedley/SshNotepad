@@ -1,5 +1,3 @@
-using System.Security.Cryptography;
-using System.Text;
 using System.Text.Json;
 using SshNotepad.Core;
 
@@ -29,7 +27,5 @@ static class LocalSettings
         File.WriteAllText(FilePath, JsonSerializer.Serialize(settings, new JsonSerializerOptions { WriteIndented = true }));
     }
 
-    /// <summary>Each host, login and folder has its own cache, so switching never mixes notes.</summary>
-    public static string CacheFolder(ConnectionSettings s) => Path.Combine(Home, "cache",
-        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes($"{s.User}@{s.Host.ToLowerInvariant()}:{s.Port}/{s.RemoteFolder}")))[..16]);
+    public static string CacheFolder(ConnectionSettings s) => s.CacheFolder(Home);
 }

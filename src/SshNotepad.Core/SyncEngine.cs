@@ -238,7 +238,7 @@ public sealed class SyncEngine : IDisposable
                     while (DateTime.UtcNow < until) { SaveCache(false); await Task.Delay(500, _stop.Token); }
                 }
                 catch (OperationCanceledException) { return; }
-                catch (IOException e) { SetStatus("Can't write the local copy: " + e.Message); }
+                catch (Exception e) when (e is IOException or UnauthorizedAccessException) { SetStatus("Can't write the local copy: " + e.Message); }
                 delay = TimeSpan.FromSeconds(Math.Min(30, delay.TotalSeconds * 2));
             }
         }
@@ -328,6 +328,24 @@ public sealed class SyncEngine : IDisposable
         doc.LastEdit = DateTime.UtcNow;
     }
 
+    /// <summary>Reads the local copy without changing it.</summary>
+    public static IReadOnlyDictionary<string, (int Base, bool Dirty, byte[] Content)> ReadCache(Vault vault, string cacheFolder)
+    {
+        var docs = new Dictionary<string, (int, bool, byte[])>();
+        string folder = Path.Combine(cacheFolder, "notes");
+        if (!Directory.Exists(folder)) return docs;
+        foreach (string file in Directory.GetFiles(folder, "*.bin"))
+        {
+            string id = Path.GetFileNameWithoutExtension(file);
+            using var buffer = new MemoryStream();
+            // Open as briefly as possible: the app can't replace the file meanwhile (it retries).
+            using (var s = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete)) s.CopyTo(buffer);
+            var doc = JsonSerializer.Deserialize<Doc>(vault.Decrypt("cache/" + id, buffer.ToArray()))!;
+            docs[id] = (doc.Base, doc.Dirty, doc.Content);
+        }
+        return docs;
+    }
+
     private void LoadCache()
     {
         foreach (string file in Directory.GetFiles(_cache, "*.bin"))
@@ -357,7 +375,12 @@ public sealed class SyncEngine : IDisposable
     private static void WriteAtomic(string path, byte[] data)
     {
         File.WriteAllBytes(path + ".tmp", data);
-        File.Move(path + ".tmp", path, true);
+        // Windows refuses while another program (antivirus, backup, the viewer) has the old file open. That is usually brief.
+        for (int attempt = 1; ; attempt++)
+        {
+            try { File.Move(path + ".tmp", path, true); return; }
+            catch (Exception e) when (attempt < 10 && e is (IOException or UnauthorizedAccessException)) { Thread.Sleep(50); }
+        }
     }
 
     private void SetStatus(string status)

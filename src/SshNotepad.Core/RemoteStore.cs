@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using Renci.SshNet;
 using Renci.SshNet.Common;
 using Renci.SshNet.Security;
@@ -20,7 +22,12 @@ public interface IRemoteStore
     void Delete(string path);
 }
 
-public sealed record ConnectionSettings(string Host, int Port, string User, string Fingerprint, string RemoteFolder, string? HostKeyFingerprint);
+public sealed record ConnectionSettings(string Host, int Port, string User, string Fingerprint, string RemoteFolder, string? HostKeyFingerprint)
+{
+    /// <summary>Each host, login and folder has its own cache, so switching never mixes notes.</summary>
+    public string CacheFolder(string home) => Path.Combine(home, "cache",
+        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes($"{User}@{Host.ToLowerInvariant()}:{Port}/{RemoteFolder}")))[..16]);
+}
 
 public sealed class HostKeyException(string fingerprint, bool changed)
     : Exception(changed ? $"The host key CHANGED. It is now {fingerprint}." : $"The host key {fingerprint} is not trusted yet.")
@@ -36,11 +43,14 @@ public sealed class SftpStore : IRemoteStore, IDisposable
     private readonly object _lock = new();
     private readonly HashSet<string> _knownFolders = [];
 
-    private SftpStore(SftpClient client, string root) { _client = client; _root = root; }
+    private readonly bool _readOnly;
+
+    private SftpStore(SftpClient client, string root, bool readOnly) { _client = client; _root = root; _readOnly = readOnly; }
 
     public bool IsConnected => _client.IsConnected;
 
-    public static SftpStore Connect(ConnectionSettings settings, PageantClient agent)
+    /// <param name="readOnly">Refuses every change, and doesn't create the folder.</param>
+    public static SftpStore Connect(ConnectionSettings settings, PageantClient agent, bool readOnly = false)
     {
         var source = new AgentKeySource(agent, agent.FindKey(settings.Fingerprint));
         var info = new ConnectionInfo(settings.Host, settings.Port, settings.User,
@@ -58,8 +68,9 @@ public sealed class SftpStore : IRemoteStore, IDisposable
             string folder = settings.RemoteFolder;
             if (folder.StartsWith("~/")) folder = folder[2..];
             string root = folder.StartsWith('/') ? folder : client.WorkingDirectory.TrimEnd('/') + "/" + folder;
-            var store = new SftpStore(client, root.TrimEnd('/'));
-            store.EnsureFolder(store._root);
+            var store = new SftpStore(client, root.TrimEnd('/'), readOnly);
+            if (!readOnly) store.EnsureFolder(store._root);
+            else if (!client.Exists(store._root)) throw new DirectoryNotFoundException($"The folder {store._root} doesn't exist on the host.");
             return store;
         }
         catch (SshException) when (seen is not null && seen != settings.HostKeyFingerprint)
@@ -95,6 +106,7 @@ public sealed class SftpStore : IRemoteStore, IDisposable
 
     public bool TryCreate(string path, byte[] data)
     {
+        RequireWritable();
         lock (_lock)
         {
             string target = Full(path), temp = Upload(target, data);
@@ -114,6 +126,7 @@ public sealed class SftpStore : IRemoteStore, IDisposable
 
     public void Replace(string path, byte[] data)
     {
+        RequireWritable();
         lock (_lock)
         {
             string target = Full(path);
@@ -121,7 +134,13 @@ public sealed class SftpStore : IRemoteStore, IDisposable
         }
     }
 
-    public void Delete(string path) { lock (_lock) _client.DeleteFile(Full(path)); }
+    public void Delete(string path)
+    {
+        RequireWritable();
+        lock (_lock) _client.DeleteFile(Full(path));
+    }
+
+    private void RequireWritable() { if (_readOnly) throw new InvalidOperationException("This connection is read-only."); }
 
     public void Dispose() => _client.Dispose();
 

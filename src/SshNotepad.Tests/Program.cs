@@ -79,6 +79,21 @@ host.Down = false;
 a = Open(cacheA, "OFFICE");
 Check("offline edit survives a restart", Text(a, note) == "offline A");
 Check("cache is encrypted", !Directory.GetFiles(cacheA, "*", SearchOption.AllDirectories).Any(f => File.ReadAllText(f).Contains("offline A")));
+string cached = Path.Combine(cacheA, "notes", note + ".bin");
+var before = File.ReadAllBytes(cached);
+var readBack = SyncEngine.ReadCache(a.Vault, cacheA)[note];
+Check("local copy can be read without changing it", readBack.Dirty && readBack.Content.AsSpan().IndexOf("offline A"u8) >= 0
+    && File.ReadAllBytes(cached).AsSpan().SequenceEqual(before));
+var reader = new FileStream(cached, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+var release = Task.Run(() => { Thread.Sleep(200); reader.Dispose(); });
+a.SetNote(note, new NoteContent("offline A, read meanwhile"));
+host.Down = true;
+Sync(a);
+host.Down = false;
+release.Wait();
+Check("saving waits for a program reading the local copy", a.Status.StartsWith("Offline: down")
+    && SyncEngine.ReadCache(a.Vault, cacheA)[note].Content.AsSpan().IndexOf("read meanwhile"u8) >= 0);
+a.SetNote(note, new NoteContent("offline A"));
 b.SetNote(note, new NoteContent("home B")); Sync(b);
 Sync(a); Sync(a); Sync(b);
 var conflict = b.Conflicts();
@@ -228,6 +243,17 @@ if (args.Length is 2 or 3)
     sftp.Replace("probe", [1]); sftp.Replace("probe", [2]);
     Check("live replace", sftp.Read("probe")[0] == 2);
     sftp.Delete("probe");
+    using (var readOnly = SftpStore.Connect(settings, agent, readOnly: true))
+    {
+        Check("live read-only connection reads", readOnly.Read($"docs/{id}/00000001.enc").Length > 0);
+        Check("live read-only connection refuses changes", Throws<InvalidOperationException>(() => readOnly.TryCreate("ro", [1]))
+            && Throws<InvalidOperationException>(() => readOnly.Replace("ro", [1]))
+            && Throws<InvalidOperationException>(() => readOnly.Delete($"docs/{id}/00000001.enc"))
+            && sftp.TryRead("ro") is null && sftp.TryRead($"docs/{id}/00000001.enc") is not null);
+    }
+    var missing = settings with { RemoteFolder = "~/.sshnotepad-test/missing-" + id };
+    Check("live read-only connection creates no folder", Throws<DirectoryNotFoundException>(() => SftpStore.Connect(missing, agent, readOnly: true))
+        && Throws<DirectoryNotFoundException>(() => SftpStore.Connect(missing, agent, readOnly: true)));
     sftp.Delete($"docs/{id}/00000001.enc");
 
     // Polling with the host's real folder times: two computers, in a folder of their own.

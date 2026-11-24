@@ -32,6 +32,18 @@ A Notepad-style app for Windows that keeps your notes and open windows on an SSH
 > [!WARNING]
 > Your notes can only be unlocked with your private SSH key. There is no recovery password. **If you lose the key, the notes can't be read again**, so back it up.
 
+## Read-only viewer
+
+A separate window for browsing the notes on the server without changing them. It uses the app's connection settings and Pageant, and its connection refuses every change.
+
+```powershell
+dotnet run --project src\SshNotepad.Viewer
+```
+
+- Search titles and text, show deleted notes, and look at any saved version.
+- **This PC** shows whether the server's version matches this computer's copy.
+- **Save a copy** writes the text shown to an **unencrypted** file.
+
 ## Build
 
 Run these from the repository folder. Build output goes to `%LOCALAPPDATA%\SshNotepadBuild`.
@@ -73,6 +85,7 @@ dotnet run --project src\SshNotepad.Tests -- user@host SHA256:hostkey SHA256:pag
 |---|---|
 | `src/SshNotepad` | The WinForms app |
 | `src/SshNotepad.Core` | Sync, encryption, SFTP and Pageant client |
+| `src/SshNotepad.Viewer` | Read-only viewer window |
 | `src/SshNotepad.Tests` | Console tests |
 
 ## License
