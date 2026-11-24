@@ -1,0 +1,11 @@
+<Project>
+  <!-- Source lives on the share; build output stays on the local disk. -->
+  <PropertyGroup>
+    <BuildRoot>$(LOCALAPPDATA)\SshNotepadBuild\$(MSBuildProjectName)\</BuildRoot>
+    <BaseIntermediateOutputPath>$(BuildRoot)obj\</BaseIntermediateOutputPath>
+    <BaseOutputPath>$(BuildRoot)bin\</BaseOutputPath>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+</Project>

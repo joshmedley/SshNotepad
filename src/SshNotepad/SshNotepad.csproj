@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <NoWarn>$(NoWarn);WFO1000</NoWarn><UseWindowsForms>true</UseWindowsForms>
+    <ApplicationIcon>notepad.ico</ApplicationIcon>
+    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
+  </PropertyGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="notepad.ico" LogicalName="notepad.ico" />
+    <ProjectReference Include="..\SshNotepad.Core\SshNotepad.Core.csproj" />
+  </ItemGroup>
+</Project>
